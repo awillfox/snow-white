@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 
 	"snow_white/internal/tuitypes"
 )
@@ -33,11 +34,19 @@ func Clone(req CloneRequest) (dropped []string, err error) {
 	restoreCmd := buildRestoreCmd(req.TargetDSN)
 	restoreCmd.Stdin = pr
 
-	dumpStderr, _ := dumpCmd.StderrPipe()
-	restoreStderr, _ := restoreCmd.StderrPipe()
+	dumpStderr, err := dumpCmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("pg_dump stderr pipe: %w", err)
+	}
+	restoreStderr, err := restoreCmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("pg_restore stderr pipe: %w", err)
+	}
 
-	go scanLines(dumpStderr, req.Progress)
-	go scanLines(restoreStderr, req.Progress)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); scanLines(dumpStderr, req.Progress) }()
+	go func() { defer wg.Done(); scanLines(restoreStderr, req.Progress) }()
 
 	if err := dumpCmd.Start(); err != nil {
 		return nil, fmt.Errorf("pg_dump start: %w", err)
@@ -50,6 +59,7 @@ func Clone(req CloneRequest) (dropped []string, err error) {
 	dumpErr := dumpCmd.Wait()
 	pw.Close()
 	restoreErr := restoreCmd.Wait()
+	wg.Wait()
 
 	if dumpErr != nil || restoreErr != nil {
 		dropped, _ = DropNewTables(req.TargetDSN, before)

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 
 	"snow_white/internal/tuitypes"
 )
@@ -33,14 +34,22 @@ func Dump(req DumpRequest) error {
 	cmd.Stdout = req.Dest
 	cmd.Env = os.Environ()
 
-	stderr, _ := cmd.StderrPipe()
-	go scanLines(stderr, req.Progress)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("pg_dump stderr pipe: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); scanLines(stderr, req.Progress) }()
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("pg_dump start: %w", err)
 	}
 	if err := cmd.Wait(); err != nil {
+		wg.Wait()
 		return fmt.Errorf("pg_dump: %w", err)
 	}
+	wg.Wait()
 	return nil
 }

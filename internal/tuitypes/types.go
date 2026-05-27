@@ -1,7 +1,11 @@
 // internal/tuitypes/types.go
 package tuitypes
 
-import "snow_white/internal/profile"
+import (
+	"net/url"
+
+	"snow_white/internal/profile"
+)
 
 type Screen int
 
@@ -49,9 +53,14 @@ type ConnConfig struct {
 }
 
 func (c ConnConfig) DSN() string {
-	return "postgres://" + c.User + ":" + c.Password +
-		"@" + c.Host + ":" + c.Port + "/" + c.DBName +
-		"?sslmode=" + c.SSLMode
+	u := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.User, c.Password),
+		Host:     c.Host + ":" + c.Port,
+		Path:     "/" + c.DBName,
+		RawQuery: "sslmode=" + c.SSLMode,
+	}
+	return u.String()
 }
 
 type AppState struct {

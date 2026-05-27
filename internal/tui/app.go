@@ -7,14 +7,13 @@ import (
 	"snow_white/internal/tuitypes"
 )
 
-// App is the top-level Bubbletea model.
 type App struct {
-	State   tuitypes.AppState
+	State   *tuitypes.AppState
 	screen  tuitypes.Screen
 	current tea.Model
 }
 
-func New(state tuitypes.AppState) App {
+func New(state *tuitypes.AppState) App {
 	a := App{State: state, screen: tuitypes.ScreenStart}
 	a.current = screens.NewStart()
 	return a
@@ -46,21 +45,21 @@ func (a App) navigate(to tuitypes.Screen) (App, tea.Cmd) {
 	a.screen = to
 	switch to {
 	case tuitypes.ScreenProfile:
-		a.current = screens.NewProfile(&a.State)
+		a.current = screens.NewProfile(a.State)
 	case tuitypes.ScreenSource:
-		a.current = screens.NewSource(&a.State)
+		a.current = screens.NewSource(a.State)
 	case tuitypes.ScreenMode:
-		a.current = screens.NewMode(&a.State)
+		a.current = screens.NewMode(a.State)
 	case tuitypes.ScreenTarget:
-		a.current = screens.NewTarget(&a.State)
+		a.current = screens.NewTarget(a.State)
 	case tuitypes.ScreenCloneOptions:
-		a.current = screens.NewOptions(&a.State)
+		a.current = screens.NewOptions(a.State)
 	case tuitypes.ScreenDumpOutput:
-		a.current = screens.NewDumpOutput(&a.State)
+		a.current = screens.NewDumpOutput(a.State)
 	case tuitypes.ScreenProgress:
-		a.current = screens.NewProgress(&a.State)
+		a.current = screens.NewProgress(a.State)
 	case tuitypes.ScreenResult:
-		a.current = screens.NewResult(&a.State)
+		a.current = screens.NewResult(a.State)
 	}
 	return a, a.current.Init()
 }

@@ -15,7 +15,7 @@ import (
 func main() {
 	profiles, _ := profile.Load()
 
-	initial := tuitypes.AppState{Profiles: profiles}
+	initial := &tuitypes.AppState{Profiles: profiles}
 	app := appui.New(initial)
 
 	p := tea.NewProgram(app, tea.WithAltScreen())
