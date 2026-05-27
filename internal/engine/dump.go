@@ -6,24 +6,25 @@ import (
 	"io"
 	"os"
 	"os/exec"
+
+	"snow_white/internal/tuitypes"
 )
 
 // DumpRequest holds everything the dump engine needs.
 type DumpRequest struct {
 	SourceDSN string
-	Dest      io.Writer // os.Stdout for stdout mode, *os.File for file mode
-	Options   CloneOptions
-	// Progress is called with each stderr line. May be nil (stdout mode suppresses progress).
-	Progress func(line string)
+	Dest      io.Writer
+	Options   tuitypes.CloneOptions
+	Progress  func(line string)
 }
 
 // Dump runs pg_dump and writes output to req.Dest.
 func Dump(req DumpRequest) error {
 	args := []string{"-Fc", "--no-password"}
 	switch req.Options {
-	case CloneSchemaOnly:
+	case tuitypes.CloneSchemaOnly:
 		args = append(args, "-s")
-	case CloneDataOnly:
+	case tuitypes.CloneDataOnly:
 		args = append(args, "-a")
 	}
 	args = append(args, req.SourceDSN)

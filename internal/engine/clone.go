@@ -7,30 +7,18 @@ import (
 	"io"
 	"os"
 	"os/exec"
-)
 
-// CloneOptions controls what pg_dump includes.
-type CloneOptions int
-
-const (
-	CloneBoth       CloneOptions = iota // schema + data
-	CloneSchemaOnly                     // -s flag
-	CloneDataOnly                       // -a flag
+	"snow_white/internal/tuitypes"
 )
 
 // CloneRequest holds everything the clone engine needs.
 type CloneRequest struct {
 	SourceDSN string
 	TargetDSN string
-	Options   CloneOptions
-	// Progress is called with each line of stderr from pg_dump or pg_restore.
-	// Called from a goroutine; must be safe to call concurrently.
-	Progress func(line string)
+	Options   tuitypes.CloneOptions
+	Progress  func(line string)
 }
 
-// Clone streams pg_dump -Fc output directly into pg_restore via an io.Pipe.
-// Snapshots the target tables before starting; calls DropNewTables on failure.
-// Returns dropped table names and any error.
 func Clone(req CloneRequest) (dropped []string, err error) {
 	before, err := SnapshotTables(req.TargetDSN)
 	if err != nil {
@@ -73,12 +61,12 @@ func Clone(req CloneRequest) (dropped []string, err error) {
 	return nil, nil
 }
 
-func buildDumpCmd(dsn string, opts CloneOptions) *exec.Cmd {
+func buildDumpCmd(dsn string, opts tuitypes.CloneOptions) *exec.Cmd {
 	args := []string{"-Fc", "--no-password"}
 	switch opts {
-	case CloneSchemaOnly:
+	case tuitypes.CloneSchemaOnly:
 		args = append(args, "-s")
-	case CloneDataOnly:
+	case tuitypes.CloneDataOnly:
 		args = append(args, "-a")
 	}
 	args = append(args, dsn)
