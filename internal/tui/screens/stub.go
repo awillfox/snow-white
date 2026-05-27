@@ -12,7 +12,6 @@ func (s stub) Init() tea.Cmd                        { return nil }
 func (s stub) Update(tea.Msg) (tea.Model, tea.Cmd) { return s, nil }
 func (s stub) View() string                         { return s.label }
 
-func NewSource(s *tuitypes.AppState) tea.Model     { return stub{"[source]"} }
 func NewMode(s *tuitypes.AppState) tea.Model       { return stub{"[mode]"} }
 func NewTarget(s *tuitypes.AppState) tea.Model     { return stub{"[target]"} }
 func NewOptions(s *tuitypes.AppState) tea.Model    { return stub{"[options]"} }
