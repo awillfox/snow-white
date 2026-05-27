@@ -12,5 +12,4 @@ func (s stub) Init() tea.Cmd                        { return nil }
 func (s stub) Update(tea.Msg) (tea.Model, tea.Cmd) { return s, nil }
 func (s stub) View() string                         { return s.label }
 
-func NewProgress(s *tuitypes.AppState) tea.Model   { return stub{"[progress]"} }
-func NewResult(s *tuitypes.AppState) tea.Model     { return stub{"[result]"} }
+func NewResult(s *tuitypes.AppState) tea.Model { return stub{"[result]"} }
