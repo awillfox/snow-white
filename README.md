@@ -4,8 +4,48 @@ Interactive CLI tool for cloning or dumping a PostgreSQL database. A Bubbletea T
 
 ## Requirements
 
-- Go 1.22+
-- `pg_dump` and `pg_restore` on your PATH (PostgreSQL client tools)
+The following must be installed before building or running snow_white:
+
+### Go 1.26+
+
+Download from https://go.dev/dl/ or use your package manager:
+
+```bash
+# macOS
+brew install go
+
+# Debian/Ubuntu
+sudo apt install golang-go
+
+# Arch
+sudo pacman -S go
+```
+
+### PostgreSQL client tools (`pg_dump` / `pg_restore`)
+
+These ship with the PostgreSQL client package — you do **not** need a full server install:
+
+```bash
+# macOS
+brew install libpq
+brew link --force libpq   # puts pg_dump/pg_restore on PATH
+
+# Debian/Ubuntu
+sudo apt install postgresql-client
+
+# Arch
+sudo pacman -S postgresql-libs
+
+# Windows (WSL)
+sudo apt install postgresql-client
+```
+
+Verify both are available:
+
+```bash
+pg_dump --version
+pg_restore --version
+```
 
 ## Build
 
