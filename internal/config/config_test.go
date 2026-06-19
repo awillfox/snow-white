@@ -39,3 +39,22 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("default interval = %v, want 60s", cfg.CollectInterval)
 	}
 }
+
+func TestLoadRiskCaps(t *testing.T) {
+	t.Setenv("INVX_APIKEY", "k")
+	t.Setenv("INVX_SECRET", "s")
+	t.Setenv("INVX_MAX_ORDER", "500000")  // satang
+	t.Setenv("INVX_MAX_DAILY", "5000000")
+	t.Setenv("INVX_MAX_LOSS", "1000000")
+	t.Setenv("INVX_KILL_FILE", "./.halt")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxOrder != 500000 || cfg.MaxDaily != 5000000 || cfg.MaxLoss != 1000000 {
+		t.Fatalf("caps not loaded: %+v", cfg)
+	}
+	if cfg.KillFile != "./.halt" {
+		t.Fatalf("kill file = %q", cfg.KillFile)
+	}
+}

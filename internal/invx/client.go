@@ -179,3 +179,37 @@ func (c *Client) post(ctx context.Context, path string, body []byte) ([]byte, er
 	}
 	return raw, nil
 }
+
+// get signs and sends a GET to basePath+path (empty body in the signature).
+func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
+	fullPath := basePath + path
+	uid := uuid.NewString()
+	ts := strconv.FormatInt(c.now().UnixMilli(), 10)
+
+	sts := buildStringToSign(c.apikey, "GET", c.host, fullPath, "", contentType, uid, ts, "")
+	signature := sign(c.secret, sts)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+fullPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	req.Header["Content-Type"] = []string{contentType}
+	req.Header["X-INVX-APIKEY"] = []string{c.apikey}
+	req.Header["X-INVX-SIGNATURE"] = []string{signature}
+	req.Header["X-INVX-REQUEST-UID"] = []string{uid}
+	req.Header["X-INVX-TIMESTAMP"] = []string{ts}
+
+	res, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do GET %s: %w", path, err)
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read GET %s: %w", path, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http %d for %s: %s", res.StatusCode, path, string(raw))
+	}
+	return raw, nil
+}

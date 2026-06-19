@@ -15,6 +15,10 @@ type Config struct {
 	PSQLURL         string        `mapstructure:"PSQL_URL"`
 	Symbols         []string      `mapstructure:"INVX_SYMBOLS"`
 	CollectInterval time.Duration `mapstructure:"INVX_COLLECT_INTERVAL"`
+	MaxOrder        int64         `mapstructure:"INVX_MAX_ORDER"`
+	MaxDaily        int64         `mapstructure:"INVX_MAX_DAILY"`
+	MaxLoss         int64         `mapstructure:"INVX_MAX_LOSS"`
+	KillFile        string        `mapstructure:"INVX_KILL_FILE"`
 }
 
 // Load reads configuration from environment variables, falling back to an
@@ -36,6 +40,7 @@ func Load() (*Config, error) {
 	for _, k := range []string{
 		"INVX_APIKEY", "INVX_SECRET", "INVX_HOST", "PSQL_URL",
 		"INVX_SYMBOLS", "INVX_COLLECT_INTERVAL",
+		"INVX_MAX_ORDER", "INVX_MAX_DAILY", "INVX_MAX_LOSS", "INVX_KILL_FILE",
 	} {
 		_ = v.BindEnv(k)
 	}

@@ -2,6 +2,7 @@ package invx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -70,4 +71,22 @@ func TestExactCaseHeadersOnWire(t *testing.T) {
 	// this is the actual regression guard.
 	require.NotContains(t, raw, "X-Invx-Request-Uid")
 	require.NotContains(t, raw, "X-Invx-Apikey")
+}
+
+func TestDecimalNumber(t *testing.T) {
+	// 7000 satang -> "70.00" ; 10000000 (x1e8) -> "0.10000000"
+	if got := decimalNumber(7000, 2); string(got) != "70.00" {
+		t.Fatalf("price = %q, want 70.00", got)
+	}
+	if got := decimalNumber(10000000, 8); string(got) != "0.10000000" {
+		t.Fatalf("qty = %q, want 0.10000000", got)
+	}
+	// Marshals as a bare JSON number, not a quoted string.
+	b, err := json.Marshal(map[string]json.Number{"limitPrice": decimalNumber(7000, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"limitPrice":70.00}` {
+		t.Fatalf("marshal = %s", b)
+	}
 }
