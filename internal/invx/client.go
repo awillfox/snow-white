@@ -3,6 +3,7 @@ package invx
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,7 +30,16 @@ type Client struct {
 
 func New(apikey, secret, host string, hc *http.Client) *Client {
 	if hc == nil {
-		hc = &http.Client{Timeout: 15 * time.Second}
+		// InnovestX matches header names case-sensitively and requires the
+		// exact-case X-INVX-* headers. HTTP/2 forces all header field names to
+		// lowercase on the wire, so pin HTTP/1.1 to preserve their casing.
+		// NextProtos must be set so TLS ALPN only offers http/1.1 — otherwise
+		// the server negotiates h2 and Go's h1 transport sees raw h2 frames.
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		tr.ForceAttemptHTTP2 = false
+		tr.TLSClientConfig = &tls.Config{NextProtos: []string{"http/1.1"}}
+		tr.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+		hc = &http.Client{Timeout: 15 * time.Second, Transport: tr}
 	}
 	host = strings.ToLower(host)
 	return &Client{
@@ -139,11 +149,14 @@ func (c *Client) post(ctx context.Context, path string, body []byte) ([]byte, er
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("X-INVX-APIKEY", c.apikey)
-	req.Header.Set("X-INVX-SIGNATURE", signature)
-	req.Header.Set("X-INVX-REQUEST-UID", uid)
-	req.Header.Set("X-INVX-TIMESTAMP", ts)
+	// Assign directly to the header map (not Header.Set) so the exact-case
+	// X-INVX-* names go on the wire verbatim. Header.Set canonicalizes them to
+	// "X-Invx-..." which the case-sensitive API rejects with code 4008.
+	req.Header["Content-Type"] = []string{contentType}
+	req.Header["X-INVX-APIKEY"] = []string{c.apikey}
+	req.Header["X-INVX-SIGNATURE"] = []string{signature}
+	req.Header["X-INVX-REQUEST-UID"] = []string{uid}
+	req.Header["X-INVX-TIMESTAMP"] = []string{ts}
 
 	res, err := c.hc.Do(req)
 	if err != nil {
