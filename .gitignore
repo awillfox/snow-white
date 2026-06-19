@@ -1,1 +1,21 @@
-/snow_white
+# secrets / local config
+.env
+.env.local
+
+# kill-switch file
+.halt
+
+# build output
+/snow-white
+/dist/
+*.exe
+
+# go
+*.test
+*.out
+coverage.*
+
+# editor / os
+.idea/
+.vscode/
+.DS_Store
