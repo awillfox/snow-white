@@ -13,5 +13,6 @@ func NewRootCmd() *cobra.Command {
 	}
 	root.AddCommand(newCollectCmd())
 	root.AddCommand(newAnalyzeCmd())
+	root.AddCommand(newBacktestCmd())
 	return root
 }
