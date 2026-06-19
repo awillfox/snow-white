@@ -3,6 +3,7 @@ package trader
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,7 +71,9 @@ func (p *Pipeline) Place(ctx context.Context, in Intent) (order.Order, error) {
 
 	// Kill-file forces halt before anything else.
 	if KillFileTripped(p.killFile) {
-		_ = p.store.SetHalted(ctx, day, true, "kill file present")
+		if err := p.store.SetHalted(ctx, day, true, "kill file present"); err != nil {
+			log.Printf("trader: persist halt failed: %v", err)
+		}
 		return order.Order{}, fmt.Errorf("blocked: kill file present")
 	}
 
@@ -82,7 +85,9 @@ func (p *Pipeline) Place(ctx context.Context, in Intent) (order.Order, error) {
 	dec := Check(state, p.caps, in.orderValue())
 	if !dec.Allowed {
 		if dec.TripHalt {
-			_ = p.store.SetHalted(ctx, day, true, dec.Reason)
+			if err := p.store.SetHalted(ctx, day, true, dec.Reason); err != nil {
+				log.Printf("trader: persist halt failed: %v", err)
+			}
 		}
 		return order.Order{}, fmt.Errorf("blocked: %s", dec.Reason)
 	}
@@ -146,10 +151,13 @@ func (p *Pipeline) Place(ctx context.Context, in Intent) (order.Order, error) {
 		return order.Order{}, fmt.Errorf("send order: %w", err)
 	}
 	if err := p.store.ApplyFill(ctx, order.FillInput{
-		OrderID: pending.ID, Symbol: in.Symbol, Day: day,
-		NewQty: 0, NewAvgCost: 0, NewRealizedPnl: 0,
-		SpentDelta: in.orderValue(), LossDelta: 0,
-		ExchangeRef: fmt.Sprintf("%d", orderID),
+		OrderID:      pending.ID,
+		Symbol:       in.Symbol,
+		Day:          day,
+		SpentDelta:   in.orderValue(),
+		LossDelta:    0,
+		ExchangeRef:  fmt.Sprintf("%d", orderID),
+		SkipPosition: true, // live path defers position tracking to Task 11 reconcile
 	}); err != nil {
 		return order.Order{}, err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -134,9 +133,11 @@ func TestPipeline(t *testing.T) {
 		require.Len(t, store.insertedPending, 1)
 		require.Equal(t, "paper", store.insertedPending[0].Mode)
 
-		// One ApplyFill call (paper simulates fill).
+		// One ApplyFill call (paper simulates fill, must update position).
 		require.Len(t, store.applyFillCalls, 1)
 		require.Equal(t, "paper", store.applyFillCalls[0].ExchangeRef)
+		require.False(t, store.applyFillCalls[0].SkipPosition,
+			"paper path ApplyFill must NOT skip position (it simulates position updates)")
 
 		// Returned order reflects paper/accepted.
 		require.Equal(t, string(order.Paper), o.Mode)
@@ -157,9 +158,7 @@ func TestPipeline(t *testing.T) {
 			Strategy: "ma-cross",
 		}
 		_, err := p.Place(ctx, intent)
-		require.Error(t, err)
-		require.True(t, strings.Contains(err.Error(), "cap") || strings.Contains(err.Error(), "blocked"),
-			"error should mention cap or blocked, got: %s", err.Error())
+		require.ErrorContains(t, err, "blocked:")
 
 		require.Empty(t, store.insertedPending, "guard block must not insert any order")
 		require.Empty(t, broker.sendCalls, "guard block must not call broker")
@@ -190,10 +189,12 @@ func TestPipeline(t *testing.T) {
 		require.Equal(t, store.nextID, broker.sendCalls[0].ClientOrderID,
 			"clientOrderID must be the pending order's DB id")
 
-		// ApplyFill called with exchange ref set.
+		// ApplyFill called with exchange ref set and SkipPosition=true (live defers position to reconcile).
 		require.Len(t, store.applyFillCalls, 1)
 		require.Equal(t, fmt.Sprintf("%d", exchangeOrderID), store.applyFillCalls[0].ExchangeRef,
 			"ApplyFill must carry the exchange-returned order id")
+		require.True(t, store.applyFillCalls[0].SkipPosition,
+			"live path ApplyFill must set SkipPosition=true to avoid zeroing positions")
 
 		// No Settle call (live accepted goes through ApplyFill, not Settle).
 		require.Empty(t, store.settledCalls)

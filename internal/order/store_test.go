@@ -120,3 +120,72 @@ func TestApplyFillIsAtomic(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(1000), risk.SpentToday)
 }
+
+func TestApplyFillSkipPosition(t *testing.T) {
+	ctx := context.Background()
+	pool := newTestPool(t)
+	store := NewStore(pool)
+	day := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+
+	// Seed a position via a normal ApplyFill (SkipPosition=false).
+	seed, err := store.InsertPending(ctx, InsertPendingInput{
+		ClientUID:  "119d1bae-e2f1-42d9-b9e8-23d495dbe9f9",
+		Symbol:     "BTCTHB",
+		Side:       "BUY",
+		Type:       "LIMIT",
+		LimitPrice: 100000,
+		Quantity:   5000000,
+		Mode:       "paper",
+		Strategy:   "seed",
+	})
+	require.NoError(t, err)
+	_, err = store.RiskToday(ctx, day)
+	require.NoError(t, err)
+	require.NoError(t, store.ApplyFill(ctx, FillInput{
+		OrderID:     seed.ID,
+		Symbol:      "BTCTHB",
+		Day:         day,
+		NewQty:      5000000,
+		NewAvgCost:  100000,
+		SpentDelta:  500,
+		ExchangeRef: "seed",
+		// SkipPosition defaults to false → position is written
+	}))
+
+	// Confirm the position was set.
+	pos, err := store.GetPosition(ctx, "BTCTHB")
+	require.NoError(t, err)
+	require.Equal(t, int64(5000000), pos.Qty)
+
+	// Now call ApplyFill with SkipPosition=true (live path after sending to exchange).
+	live, err := store.InsertPending(ctx, InsertPendingInput{
+		ClientUID:  "229d1bae-e2f1-42d9-b9e8-23d495dbe9f9",
+		Symbol:     "BTCTHB",
+		Side:       "BUY",
+		Type:       "LIMIT",
+		LimitPrice: 200000,
+		Quantity:   1000000,
+		Mode:       "live",
+		Strategy:   "live",
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.ApplyFill(ctx, FillInput{
+		OrderID:      live.ID,
+		Symbol:       "BTCTHB",
+		Day:          day,
+		SpentDelta:   200,
+		ExchangeRef:  "77",
+		SkipPosition: true, // must NOT touch the position row
+	}))
+
+	// Position must still reflect the seeded values — not zeroed.
+	pos, err = store.GetPosition(ctx, "BTCTHB")
+	require.NoError(t, err)
+	require.Equal(t, int64(5000000), pos.Qty, "SkipPosition=true must not zero the position qty")
+	require.Equal(t, int64(100000), pos.AvgCost, "SkipPosition=true must not zero avg_cost")
+
+	// Risk spent_today should have been incremented by both fills.
+	risk, err := store.RiskToday(ctx, day)
+	require.NoError(t, err)
+	require.Equal(t, int64(700), risk.SpentToday, "risk spent must accumulate across both fills")
+}

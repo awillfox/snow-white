@@ -99,6 +99,7 @@ type FillInput struct {
 	SpentDelta     int64
 	LossDelta      int64
 	ExchangeRef    string
+	SkipPosition   bool // if true, skip UpsertPosition (live path defers position tracking to Task 11 reconcile)
 }
 
 // ApplyFill settles the order as accepted, upserts the position, and increments the
@@ -121,13 +122,15 @@ func (s *Store) ApplyFill(ctx context.Context, in FillInput) error {
 		return fmt.Errorf("settle in tx: %w", err)
 	}
 
-	if err := q.UpsertPosition(ctx, sqlc.UpsertPositionParams{
-		Symbol:      in.Symbol,
-		Qty:         in.NewQty,
-		AvgCost:     in.NewAvgCost,
-		RealizedPnl: in.NewRealizedPnl,
-	}); err != nil {
-		return fmt.Errorf("upsert position in tx: %w", err)
+	if !in.SkipPosition {
+		if err := q.UpsertPosition(ctx, sqlc.UpsertPositionParams{
+			Symbol:      in.Symbol,
+			Qty:         in.NewQty,
+			AvgCost:     in.NewAvgCost,
+			RealizedPnl: in.NewRealizedPnl,
+		}); err != nil {
+			return fmt.Errorf("upsert position in tx: %w", err)
+		}
 	}
 
 	if err := q.UpdateRiskSpentLoss(ctx, sqlc.UpdateRiskSpentLossParams{
