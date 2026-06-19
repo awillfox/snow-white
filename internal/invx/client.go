@@ -143,6 +143,15 @@ func (d tickerRawDA) toCandle() (TickerCandle, error) {
 	}, nil
 }
 
+// postJSON marshals v once and posts it (the exact bytes are signed and sent).
+func (c *Client) postJSON(ctx context.Context, path string, v any) ([]byte, error) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("marshal %s body: %w", path, err)
+	}
+	return c.post(ctx, path, body)
+}
+
 // post signs and sends a POST to basePath+path. body is the exact bytes signed and sent.
 func (c *Client) post(ctx context.Context, path string, body []byte) ([]byte, error) {
 	fullPath := basePath + path
