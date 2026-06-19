@@ -106,6 +106,16 @@ func newOrderSendCmd() *cobra.Command {
 				return fmt.Errorf("order size is zero: provide a non-zero --qty or --value")
 			}
 
+			// The API misinterprets value-based limit orders (sends wildly wrong origQty).
+			// Convert --value to quantity using the limit price so we always send Quantity.
+			if valueSatang > 0 && qtyUnits == 0 {
+				if priceSatang <= 0 {
+					return fmt.Errorf("--value requires --price (to convert to quantity)")
+				}
+				qtyUnits = valueSatang * 1e8 / priceSatang
+				valueSatang = 0
+			}
+
 			in := invx.SendOrderInput{
 				Symbol:     symbol,
 				Side:       side,

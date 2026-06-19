@@ -141,7 +141,9 @@ func (p *Pipeline) Place(ctx context.Context, in Intent) (order.Order, error) {
 		LimitPrice: in.RefPrice, ClientOrderID: pending.ID,
 	}
 	if in.Side == invx.Buy {
-		send.Value = in.ValueTHB
+		// The API misinterprets value-based limit orders (sends wildly wrong origQty).
+		// Convert value→quantity using integer math: qtyUnits = valueSatang * 1e8 / priceSatang.
+		send.Quantity = in.ValueTHB * 1e8 / in.RefPrice
 	} else {
 		send.Quantity = in.Quantity
 	}

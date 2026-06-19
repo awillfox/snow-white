@@ -189,6 +189,14 @@ func TestPipeline(t *testing.T) {
 		require.Equal(t, store.nextID, broker.sendCalls[0].ClientOrderID,
 			"clientOrderID must be the pending order's DB id")
 
+		// Buy must send Quantity (not Value) — API misinterprets value-based limit orders.
+		// With ValueTHB=10_000_00 (satang) and RefPrice=3_000_000_00 (satang):
+		// qty = 10_000_00 * 1e8 / 3_000_000_00 = 333_333 units (≈0.00333333 BTC x1e8)
+		require.Greater(t, broker.sendCalls[0].Quantity, int64(0),
+			"live Buy must send Quantity > 0 (converted from ValueTHB / RefPrice)")
+		require.Equal(t, int64(0), broker.sendCalls[0].Value,
+			"live Buy must NOT send Value (API misinterprets value-based limit orders)")
+
 		// ApplyFill called with exchange ref set and SkipPosition=true (live defers position to reconcile).
 		require.Len(t, store.applyFillCalls, 1)
 		require.Equal(t, fmt.Sprintf("%d", exchangeOrderID), store.applyFillCalls[0].ExchangeRef,
