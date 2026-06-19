@@ -15,5 +15,8 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newAnalyzeCmd())
 	root.AddCommand(newBacktestCmd())
 	root.AddCommand(newTradeCmd())
+	root.AddCommand(newOrderCmd())
+	root.AddCommand(newBalanceCmd())
+	root.AddCommand(newStatusCmd())
 	return root
 }
