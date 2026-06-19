@@ -16,7 +16,12 @@ tasks:
   migrate-dev:
     desc: Apply schema.hcl to the dev database
     cmds:
-      - atlas schema apply --url "$PSQL_DEV_URL" --to "file://schema.hcl" --dev-url "docker://postgres/16/dev?search_path=public" --auto-approve
+      - atlas schema apply --url "$PSQL_DEV_URL" --to "file://schema.hcl" --auto-approve
+
+  migrate-run:
+    desc: Apply schema.hcl to the production/Neon database
+    cmds:
+      - atlas schema apply --url "$PSQL_URL" --to "file://schema.hcl" --auto-approve
 
   generate-sql-schema:
     desc: Inspect dev DB and regenerate schema.sql for sqlc
