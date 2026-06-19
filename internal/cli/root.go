@@ -18,5 +18,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newOrderCmd())
 	root.AddCommand(newBalanceCmd())
 	root.AddCommand(newStatusCmd())
+	root.AddCommand(newKillCmd())
+	root.AddCommand(newResumeCmd())
 	return root
 }

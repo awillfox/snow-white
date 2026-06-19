@@ -63,6 +63,14 @@ func newTradeCmd() *cobra.Command {
 			fmt.Printf("trader starting: %s %s caps[order=%d daily=%d loss=%d] kill=%q\n",
 				strat.Name(), mode, caps.MaxOrder, caps.MaxDaily, caps.MaxLoss, cfg.KillFile)
 
+			if live {
+				if n, err := trader.Reconcile(ctx, orderStore, client, symbol); err != nil {
+					return fmt.Errorf("startup reconcile: %w", err)
+				} else if n > 0 {
+					fmt.Printf("reconciled %d pending live order(s)\n", n)
+				}
+			}
+
 			if err := tr.Run(ctx); err != nil && err != context.Canceled {
 				return err
 			}
