@@ -49,5 +49,13 @@ func Load() (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
+
+	// INVX_MAX_ORDER / INVX_MAX_DAILY / INVX_MAX_LOSS are entered in THB
+	// (human-friendly, matches .env labels). Convert to satang (×100) for all
+	// internal comparisons, which use int64 satang throughout.
+	cfg.MaxOrder *= 100
+	cfg.MaxDaily *= 100
+	cfg.MaxLoss *= 100
+
 	return &cfg, nil
 }

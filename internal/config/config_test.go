@@ -43,16 +43,17 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadRiskCaps(t *testing.T) {
 	t.Setenv("INVX_APIKEY", "k")
 	t.Setenv("INVX_SECRET", "s")
-	t.Setenv("INVX_MAX_ORDER", "500000")  // satang
-	t.Setenv("INVX_MAX_DAILY", "5000000")
-	t.Setenv("INVX_MAX_LOSS", "1000000")
+	// Env vars are THB; Load() converts to satang (×100) internally.
+	t.Setenv("INVX_MAX_ORDER", "5000")   // 5000 THB → 500000 satang
+	t.Setenv("INVX_MAX_DAILY", "50000")  // 50000 THB → 5000000 satang
+	t.Setenv("INVX_MAX_LOSS", "10000")   // 10000 THB → 1000000 satang
 	t.Setenv("INVX_KILL_FILE", "./.halt")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.MaxOrder != 500000 || cfg.MaxDaily != 5000000 || cfg.MaxLoss != 1000000 {
-		t.Fatalf("caps not loaded: %+v", cfg)
+		t.Fatalf("caps not loaded (want satang 500000/5000000/1000000): %+v", cfg)
 	}
 	if cfg.KillFile != "./.halt" {
 		t.Fatalf("kill file = %q", cfg.KillFile)

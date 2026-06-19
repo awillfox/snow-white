@@ -13,6 +13,7 @@ import (
 	"snow-white/internal/config"
 	"snow-white/internal/invx"
 	"snow-white/internal/order"
+	"snow-white/internal/trader"
 	"snow-white/pkg/scale"
 )
 
@@ -60,10 +61,10 @@ func newOrderSendCmd() *cobra.Command {
 				return fmt.Errorf("--side must be BUY or SELL, got %q", sideStr)
 			}
 
-			// Parse order type (default LIMIT)
+			// Parse order type (default LIMIT; flag default ensures typeStr is never empty)
 			orderType := invx.Limit
 			switch strings.ToUpper(typeStr) {
-			case "LIMIT", "":
+			case "LIMIT":
 				orderType = invx.Limit
 			case "MARKET":
 				orderType = invx.Market
@@ -98,6 +99,11 @@ func newOrderSendCmd() *cobra.Command {
 					return fmt.Errorf("--value: %w", err)
 				}
 				valueSatang = v
+			}
+
+			// Guard: reject zero-size orders (catches --value 0 and scale.Parse silent-zero).
+			if qtyUnits == 0 && valueSatang == 0 {
+				return fmt.Errorf("order size is zero: provide a non-zero --qty or --value")
 			}
 
 			in := invx.SendOrderInput{
@@ -150,8 +156,27 @@ func newOrderSendCmd() *cobra.Command {
 				return err
 			}
 			ctx := cmd.Context()
-			client := invx.New(cfg.APIKey, cfg.Secret, cfg.Host, nil)
 
+			// Kill-switch check 1: file-based halt.
+			if trader.KillFileTripped(cfg.KillFile) {
+				return fmt.Errorf("blocked: kill file present (%s)", cfg.KillFile)
+			}
+
+			// Kill-switch check 2: DB halt flag.
+			pool, err := pgxpool.New(ctx, cfg.PSQLURL)
+			if err != nil {
+				return fmt.Errorf("connect postgres: %w", err)
+			}
+			defer pool.Close()
+			state, err := order.NewStore(pool).RiskToday(ctx, time.Now())
+			if err != nil {
+				return fmt.Errorf("risk state: %w", err)
+			}
+			if state.Halted {
+				return fmt.Errorf("blocked: trading halted (resume to clear)")
+			}
+
+			client := invx.New(cfg.APIKey, cfg.Secret, cfg.Host, nil)
 			orderID, err := client.SendOrder(ctx, in)
 			if err != nil {
 				return err

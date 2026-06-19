@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/signal"
 	"syscall"
@@ -16,6 +17,7 @@ import (
 	"snow-white/internal/order"
 	"snow-white/internal/strategy"
 	"snow-white/internal/trader"
+	"snow-white/pkg/scale"
 )
 
 func newTradeCmd() *cobra.Command {
@@ -60,8 +62,12 @@ func newTradeCmd() *cobra.Command {
 			if live {
 				mode = "LIVE"
 			}
-			fmt.Printf("trader starting: %s %s caps[order=%d daily=%d loss=%d] kill=%q\n",
-				strat.Name(), mode, caps.MaxOrder, caps.MaxDaily, caps.MaxLoss, cfg.KillFile)
+			fmt.Printf("trader starting: %s %s caps[order=%sTHB daily=%sTHB loss=%sTHB] kill=%q\n",
+				strat.Name(), mode,
+				scale.Format(caps.MaxOrder, 2),
+				scale.Format(caps.MaxDaily, 2),
+				scale.Format(caps.MaxLoss, 2),
+				cfg.KillFile)
 
 			if live {
 				if n, err := trader.Reconcile(ctx, orderStore, client, symbol); err != nil {
@@ -71,7 +77,7 @@ func newTradeCmd() *cobra.Command {
 				}
 			}
 
-			if err := tr.Run(ctx); err != nil && err != context.Canceled {
+			if err := tr.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 				return err
 			}
 			return nil
