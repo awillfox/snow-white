@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os/signal"
 	"syscall"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"snow-white/internal/discord"
 	"snow-white/internal/invx"
 	"snow-white/internal/order"
+	"snow-white/internal/session"
 	"snow-white/internal/strategy"
 	"snow-white/internal/trader"
 	"snow-white/pkg/scale"
@@ -59,6 +61,19 @@ func newTradeCmd() *cobra.Command {
 			strat := strategy.NewMACross(fast, slow)
 			tr := trader.NewTrader(candleStore, strat, pipe, orderStore, symbol, int64(buyTHB*100), interval)
 			tr.SetNotifier(discord.New(cfg.DiscordWebhookURL))
+
+			// Session tracking — non-fatal: snapshot net worth at daemon start.
+			sessStore := session.NewStore(pool)
+			sessTracker := session.NewTracker(client, sessStore)
+			if err := sessTracker.MarkSessionStart(ctx); err != nil {
+				log.Printf("session start snapshot failed (non-fatal): %v", err)
+			}
+			defer func() {
+				// Use Background ctx: the run ctx is already canceled on shutdown.
+				if err := sessTracker.MarkSessionEnd(context.Background()); err != nil {
+					log.Printf("session end snapshot failed (non-fatal): %v", err)
+				}
+			}()
 
 			mode := "PAPER"
 			if live {

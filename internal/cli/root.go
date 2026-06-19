@@ -21,5 +21,6 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newKillCmd())
 	root.AddCommand(newResumeCmd())
 	root.AddCommand(newNotifyCmd())
+	root.AddCommand(newSessionCmd())
 	return root
 }
