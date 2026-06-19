@@ -28,6 +28,10 @@ type Client struct {
 	now     func() time.Time
 }
 
+// New builds an InnovestX client. If hc is nil, a client pinned to HTTP/1.1 is
+// created (required — see below). If hc is non-nil, the caller MUST ensure its
+// transport uses HTTP/1.1; an h2-capable client lowercases header names on the
+// wire and the case-sensitive API then rejects every request with code 4008.
 func New(apikey, secret, host string, hc *http.Client) *Client {
 	if hc == nil {
 		// InnovestX matches header names case-sensitively and requires the
@@ -37,7 +41,10 @@ func New(apikey, secret, host string, hc *http.Client) *Client {
 		// the server negotiates h2 and Go's h1 transport sees raw h2 frames.
 		tr := http.DefaultTransport.(*http.Transport).Clone()
 		tr.ForceAttemptHTTP2 = false
-		tr.TLSClientConfig = &tls.Config{NextProtos: []string{"http/1.1"}}
+		if tr.TLSClientConfig == nil {
+			tr.TLSClientConfig = &tls.Config{}
+		}
+		tr.TLSClientConfig.NextProtos = []string{"http/1.1"}
 		tr.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
 		hc = &http.Client{Timeout: 15 * time.Second, Transport: tr}
 	}
