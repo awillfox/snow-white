@@ -27,17 +27,24 @@ type positionReader interface {
 	GetPosition(ctx context.Context, symbol string) (order.Position, error)
 }
 
+// Notifier sends a notification message. Satisfied by *discord.Client.
+// Defined here to keep the trader package free of the discord import.
+type Notifier interface {
+	Send(ctx context.Context, content string) error
+}
+
 // Trader runs a strategy on a schedule and places buy/sell intents via the pipeline.
 type Trader struct {
-	src        CandleSource
-	strat      strategy.Strategy
-	pipe       placer
-	pos        positionReader
-	symbol     string
-	buyValue   int64 // satang to deploy per Buy
-	interval   time.Duration
-	now        func() time.Time
-	reconcile  func(ctx context.Context) error // nil in paper mode
+	src       CandleSource
+	strat     strategy.Strategy
+	pipe      placer
+	pos       positionReader
+	symbol    string
+	buyValue  int64 // satang to deploy per Buy
+	interval  time.Duration
+	now       func() time.Time
+	reconcile func(ctx context.Context) error // nil in paper mode
+	notify    Notifier
 }
 
 // NewTrader constructs a Trader. buyValueTHB is in satang (THB * 100).
@@ -60,6 +67,30 @@ func NewTrader(src CandleSource, strat strategy.Strategy, pipe placer, pos posit
 // Pass nil to clear (paper mode — no hook).
 func (t *Trader) SetReconcile(fn func(ctx context.Context) error) {
 	t.reconcile = fn
+}
+
+// SetNotifier registers a Notifier that Tick pings after every successful order placement.
+// Pass nil to clear (no notifications). Notify errors are logged but never returned.
+func (t *Trader) SetNotifier(n Notifier) {
+	t.notify = n
+}
+
+// sendNotify sends a notification after a successful Place.
+// It logs and ignores any error so notification failures never affect trading.
+func (t *Trader) sendNotify(ctx context.Context, side, symbol, stratName, mode string, orderID int64) {
+	if t.notify == nil {
+		return
+	}
+	emoji := "🟢"
+	sideLabel := "BUY"
+	if side == "SELL" {
+		emoji = "🔴"
+		sideLabel = "SELL"
+	}
+	msg := fmt.Sprintf("%s %s %s via %s (order %d, %s)", emoji, sideLabel, symbol, stratName, orderID, mode)
+	if err := t.notify.Send(ctx, msg); err != nil {
+		log.Printf("trader: notify error (non-fatal): %v", err)
+	}
 }
 
 // Tick loads recent candles, evaluates the strategy, and places an intent if warranted.
@@ -100,30 +131,37 @@ func (t *Trader) Tick(ctx context.Context) error {
 		return fmt.Errorf("trader: get position: %w", err)
 	}
 
+	var placed order.Order
 	var placeErr error
 	switch sig.Action {
 	case strategy.Buy:
 		if pos.Qty > 0 {
 			return nil // already long — skip
 		}
-		_, placeErr = t.pipe.Place(ctx, Intent{
+		placed, placeErr = t.pipe.Place(ctx, Intent{
 			Symbol:   t.symbol,
 			Side:     invx.Buy,
 			RefPrice: last,
 			ValueTHB: t.buyValue,
 			Strategy: t.strat.Name(),
 		})
+		if placeErr == nil {
+			t.sendNotify(ctx, "BUY", t.symbol, t.strat.Name(), placed.Mode, placed.ID)
+		}
 	case strategy.Sell:
 		if pos.Qty <= 0 {
 			return nil // nothing to sell — skip
 		}
-		_, placeErr = t.pipe.Place(ctx, Intent{
+		placed, placeErr = t.pipe.Place(ctx, Intent{
 			Symbol:   t.symbol,
 			Side:     invx.Sell,
 			RefPrice: last,
 			Quantity: pos.Qty,
 			Strategy: t.strat.Name(),
 		})
+		if placeErr == nil {
+			t.sendNotify(ctx, "SELL", t.symbol, t.strat.Name(), placed.Mode, placed.ID)
+		}
 	}
 
 	if placeErr != nil {

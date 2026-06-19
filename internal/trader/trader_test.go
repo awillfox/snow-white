@@ -228,6 +228,122 @@ func TestTick_ReconcileHook_ErrorIsNonFatal(t *testing.T) {
 	assert.Len(t, pl.placed, 1, "Tick must still evaluate and place after reconcile error")
 }
 
+// --- notifier fakes ---
+
+// fakeNotifier records calls to Send.
+type fakeNotifier struct {
+	calls   []string
+	sendErr error
+}
+
+func (f *fakeNotifier) Send(_ context.Context, content string) error {
+	f.calls = append(f.calls, content)
+	return f.sendErr
+}
+
+type errorPlacer struct {
+	err error
+}
+
+func (e *errorPlacer) Place(_ context.Context, _ Intent) (order.Order, error) {
+	return order.Order{}, e.err
+}
+
+// TestTick_Notify_BuySuccess: successful Buy Place calls notify.Send once
+// with a message containing the symbol and "BUY".
+func TestTick_Notify_BuySuccess(t *testing.T) {
+	cs := makeCandles(100_00, 200_00, 300_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+	notif := &fakeNotifier{}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetNotifier(notif)
+
+	require.NoError(t, tr.Tick(context.Background()))
+
+	require.Len(t, notif.calls, 1, "expected exactly one notify call on successful Buy")
+	assert.Contains(t, notif.calls[0], testSymbol)
+	assert.Contains(t, notif.calls[0], "BUY")
+}
+
+// TestTick_Notify_SellSuccess: successful Sell Place calls notify.Send once
+// with a message containing the symbol and "SELL".
+func TestTick_Notify_SellSuccess(t *testing.T) {
+	const holdingQty = int64(5_000_000_00)
+	cs := makeCandles(100_00, 200_00, 400_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Sell, name: "stub"}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: holdingQty}
+	notif := &fakeNotifier{}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetNotifier(notif)
+
+	require.NoError(t, tr.Tick(context.Background()))
+
+	require.Len(t, notif.calls, 1, "expected exactly one notify call on successful Sell")
+	assert.Contains(t, notif.calls[0], testSymbol)
+	assert.Contains(t, notif.calls[0], "SELL")
+}
+
+// TestTick_Notify_PlaceBlocked_NoNotify: when Place returns an error (blocked),
+// notify.Send must NOT be called.
+func TestTick_Notify_PlaceBlocked_NoNotify(t *testing.T) {
+	cs := makeCandles(100_00, 200_00, 300_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
+
+	// Placer that always errors (simulates guard block).
+	pl := &errorPlacer{err: fmt.Errorf("blocked by guard")}
+	pos := &fakePosReader{qty: 0}
+	notif := &fakeNotifier{}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetNotifier(notif)
+
+	require.NoError(t, tr.Tick(context.Background()))
+
+	assert.Empty(t, notif.calls, "no notify on blocked Place")
+}
+
+// TestTick_Notify_NilNotifier_NoPanic: nil notifier must not panic.
+func TestTick_Notify_NilNotifier_NoPanic(t *testing.T) {
+	cs := makeCandles(100_00, 200_00, 300_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	// No SetNotifier call — notify is nil.
+
+	assert.NotPanics(t, func() {
+		require.NoError(t, tr.Tick(context.Background()))
+	})
+}
+
+// TestTick_Notify_ErrorIsNonFatal: when notify.Send returns an error,
+// Tick must still return nil (order already placed successfully).
+func TestTick_Notify_ErrorIsNonFatal(t *testing.T) {
+	cs := makeCandles(100_00, 200_00, 300_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+	notif := &fakeNotifier{sendErr: fmt.Errorf("discord down")}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetNotifier(notif)
+
+	err := tr.Tick(context.Background())
+	require.NoError(t, err, "notify error must be non-fatal — Tick must return nil")
+	assert.Len(t, pl.placed, 1, "order must still have been placed")
+}
+
 // TestRun_ContextCancel: Run cancels promptly when ctx is done.
 func TestRun_ContextCancel(t *testing.T) {
 	cs := makeCandles(100_00)
