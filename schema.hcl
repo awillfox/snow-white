@@ -218,3 +218,30 @@ table "risk_state" {
     columns = [column.day]
   }
 }
+
+table "session_tracks" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = bigint
+    identity {
+      generated = BY_DEFAULT
+    }
+  }
+  column "session_event" {
+    null = false
+    type = integer
+  }
+  column "balance" {
+    null = false
+    type = bigint
+  }
+  column "event_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}

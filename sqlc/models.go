@@ -57,3 +57,10 @@ type RiskState struct {
 	LossToday  int64              `json:"loss_today"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
+
+type SessionTrack struct {
+	ID           int64              `json:"id"`
+	SessionEvent int32              `json:"session_event"`
+	Balance      int64              `json:"balance"`
+	EventAt      pgtype.Timestamptz `json:"event_at"`
+}
