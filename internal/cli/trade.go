@@ -13,6 +13,7 @@ import (
 
 	"snow-white/internal/candle"
 	"snow-white/internal/config"
+	"snow-white/internal/discord"
 	"snow-white/internal/invx"
 	"snow-white/internal/order"
 	"snow-white/internal/strategy"
@@ -57,6 +58,7 @@ func newTradeCmd() *cobra.Command {
 			pipe := trader.NewPipeline(client, orderStore, caps, live, cfg.KillFile, nil)
 			strat := strategy.NewMACross(fast, slow)
 			tr := trader.NewTrader(candleStore, strat, pipe, orderStore, symbol, int64(buyTHB*100), interval)
+			tr.SetNotifier(discord.New(cfg.DiscordWebhookURL))
 
 			mode := "PAPER"
 			if live {
