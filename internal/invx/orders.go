@@ -41,8 +41,13 @@ func (c *Client) SendOrder(ctx context.Context, in SendOrderInput) (int64, error
 		"timeInForce":   timeInForceGTC,
 		"side":          int(in.Side),
 		"orderType":     int(in.Type),
-		"limitPrice":    decimalNumber(in.LimitPrice, 2),
 		"clientOrderId": in.ClientOrderID,
+	}
+	// Only send limitPrice for limit orders; a 0.00 price on a market order is
+	// meaningless and the API may reject it. Market-order behavior (whether the
+	// API still requires the field) must be confirmed against the live endpoint.
+	if in.LimitPrice > 0 {
+		body["limitPrice"] = decimalNumber(in.LimitPrice, 2)
 	}
 	if in.Quantity > 0 {
 		body["quantity"] = decimalNumber(in.Quantity, 8)
