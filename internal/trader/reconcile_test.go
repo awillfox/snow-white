@@ -148,6 +148,30 @@ func TestReconcile_StoreError(t *testing.T) {
 	}
 }
 
+func TestReconcile_Working_LeftPending(t *testing.T) {
+	store := &fakeReconcileStore{
+		pending: []order.Order{{ID: 7}},
+	}
+	hist := &fakeHistorySource{
+		infos: []invx.OrderInfo{
+			{ClientOrderID: 7, OrderID: 55, State: "Working"},
+		},
+	}
+
+	n, err := Reconcile(context.Background(), store, hist, "BTCTHB")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 reconciled (Working order must stay pending), got %d", n)
+	}
+	for _, s := range store.settled {
+		if s.id == 7 {
+			t.Errorf("Settle was called for id=7 (Working order) — must NOT settle a resting limit order")
+		}
+	}
+}
+
 // erroringStore returns an error on ListPendingLive to test error propagation.
 type erroringStore struct {
 	err error

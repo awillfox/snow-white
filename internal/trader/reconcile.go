@@ -50,11 +50,18 @@ func Reconcile(ctx context.Context, store reconcileStore, hist OrderHistorySourc
 			// Not found in history yet — leave pending.
 			continue
 		}
-		status := order.Accepted
-		reason := ""
-		if oi.State == "Rejected" || oi.State == "Canceled" || oi.State == "Expired" {
+		var status order.Status
+		var reason string
+		switch oi.State {
+		case "FullyExecuted":
+			status = order.Accepted
+		case "Rejected", "Canceled", "Expired":
 			status = order.Rejected
 			reason = oi.State
+		default:
+			// Working (still on book), Unknown, or any unexpected state: leave pending,
+			// do not settle. A resting limit order is not a completed fill.
+			continue
 		}
 		if err := store.Settle(ctx, o.ID, status, fmt.Sprintf("%d", oi.OrderID), reason); err != nil {
 			return n, fmt.Errorf("settle order %d: %w", o.ID, err)
