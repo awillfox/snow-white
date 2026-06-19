@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"snow-white/internal/config"
+	"snow-white/internal/discord"
 	"snow-white/internal/invx"
 	"snow-white/internal/order"
 	"snow-white/internal/trader"
@@ -195,6 +197,19 @@ func newOrderSendCmd() *cobra.Command {
 				return err
 			}
 			fmt.Printf("order placed: orderId=%d\n", orderID)
+
+			// Non-fatal Discord notification.
+			dc := discord.New(cfg.DiscordWebhookURL)
+			notifyMsg := fmt.Sprintf("📝 manual LIVE %s %s qty=%s price=%s (orderId=%d)",
+				sideLabel,
+				symbol,
+				scale.Format(in.Quantity, 8),
+				scale.Format(in.LimitPrice, 2),
+				orderID,
+			)
+			if err := dc.Send(ctx, notifyMsg); err != nil {
+				log.Printf("order: discord notify error (non-fatal): %v", err)
+			}
 			return nil
 		},
 	}
