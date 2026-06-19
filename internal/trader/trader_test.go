@@ -230,14 +230,19 @@ func TestTick_ReconcileHook_ErrorIsNonFatal(t *testing.T) {
 
 // --- notifier fakes ---
 
-// fakeNotifier records calls to Send.
+// fakeNotifier records calls to Send via a buffered channel so the goroutine-based
+// sendNotify can be observed without data races.
 type fakeNotifier struct {
-	calls   []string
+	sent    chan string // buffered; each Send writes one message
 	sendErr error
 }
 
+func newFakeNotifier() *fakeNotifier {
+	return &fakeNotifier{sent: make(chan string, 4)}
+}
+
 func (f *fakeNotifier) Send(_ context.Context, content string) error {
-	f.calls = append(f.calls, content)
+	f.sent <- content
 	return f.sendErr
 }
 
@@ -249,28 +254,32 @@ func (e *errorPlacer) Place(_ context.Context, _ Intent) (order.Order, error) {
 	return order.Order{}, e.err
 }
 
-// TestTick_Notify_BuySuccess: successful Buy Place calls notify.Send once
-// with a message containing the symbol and "BUY".
+// TestTick_Notify_BuySuccess: successful Buy Place fires notify.Send in a goroutine;
+// we wait up to 2s for the message to arrive via the channel.
 func TestTick_Notify_BuySuccess(t *testing.T) {
 	cs := makeCandles(100_00, 200_00, 300_00)
 	src := &fakeSource{candles: cs}
 	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
 	pl := &fakePlacer{}
 	pos := &fakePosReader{qty: 0}
-	notif := &fakeNotifier{}
+	notif := newFakeNotifier()
 
 	tr := newTestTrader(src, strat, pl, pos)
 	tr.SetNotifier(notif)
 
 	require.NoError(t, tr.Tick(context.Background()))
 
-	require.Len(t, notif.calls, 1, "expected exactly one notify call on successful Buy")
-	assert.Contains(t, notif.calls[0], testSymbol)
-	assert.Contains(t, notif.calls[0], "BUY")
+	// Tick returns immediately; the goroutine delivers the message asynchronously.
+	select {
+	case msg := <-notif.sent:
+		assert.Contains(t, msg, testSymbol)
+		assert.Contains(t, msg, "BUY")
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected notify message within 2s, got none")
+	}
 }
 
-// TestTick_Notify_SellSuccess: successful Sell Place calls notify.Send once
-// with a message containing the symbol and "SELL".
+// TestTick_Notify_SellSuccess: successful Sell Place fires notify.Send in a goroutine.
 func TestTick_Notify_SellSuccess(t *testing.T) {
 	const holdingQty = int64(5_000_000_00)
 	cs := makeCandles(100_00, 200_00, 400_00)
@@ -278,16 +287,20 @@ func TestTick_Notify_SellSuccess(t *testing.T) {
 	strat := &stubStrategy{action: strategy.Sell, name: "stub"}
 	pl := &fakePlacer{}
 	pos := &fakePosReader{qty: holdingQty}
-	notif := &fakeNotifier{}
+	notif := newFakeNotifier()
 
 	tr := newTestTrader(src, strat, pl, pos)
 	tr.SetNotifier(notif)
 
 	require.NoError(t, tr.Tick(context.Background()))
 
-	require.Len(t, notif.calls, 1, "expected exactly one notify call on successful Sell")
-	assert.Contains(t, notif.calls[0], testSymbol)
-	assert.Contains(t, notif.calls[0], "SELL")
+	select {
+	case msg := <-notif.sent:
+		assert.Contains(t, msg, testSymbol)
+		assert.Contains(t, msg, "SELL")
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected notify message within 2s, got none")
+	}
 }
 
 // TestTick_Notify_PlaceBlocked_NoNotify: when Place returns an error (blocked),
@@ -300,14 +313,20 @@ func TestTick_Notify_PlaceBlocked_NoNotify(t *testing.T) {
 	// Placer that always errors (simulates guard block).
 	pl := &errorPlacer{err: fmt.Errorf("blocked by guard")}
 	pos := &fakePosReader{qty: 0}
-	notif := &fakeNotifier{}
+	notif := newFakeNotifier()
 
 	tr := newTestTrader(src, strat, pl, pos)
 	tr.SetNotifier(notif)
 
 	require.NoError(t, tr.Tick(context.Background()))
 
-	assert.Empty(t, notif.calls, "no notify on blocked Place")
+	// No goroutine was started; 150ms is ample time to confirm silence.
+	select {
+	case msg := <-notif.sent:
+		t.Fatalf("unexpected notify on blocked Place: %q", msg)
+	case <-time.After(150 * time.Millisecond):
+		// ok — no notify sent
+	}
 }
 
 // TestTick_Notify_NilNotifier_NoPanic: nil notifier must not panic.
@@ -324,6 +343,31 @@ func TestTick_Notify_NilNotifier_NoPanic(t *testing.T) {
 	assert.NotPanics(t, func() {
 		require.NoError(t, tr.Tick(context.Background()))
 	})
+
+	// nil-notifier path: no goroutine is started; confirm silence.
+	// (There is no channel to read from — just assert no panic above.)
+}
+
+// TestTick_Notify_HoldSignal_NoNotify: Hold signal means no Place, so no notify goroutine.
+func TestTick_Notify_HoldSignal_NoNotify(t *testing.T) {
+	cs := makeCandles(100_00, 200_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Hold}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+	notif := newFakeNotifier()
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetNotifier(notif)
+
+	require.NoError(t, tr.Tick(context.Background()))
+
+	select {
+	case msg := <-notif.sent:
+		t.Fatalf("unexpected notify on Hold signal: %q", msg)
+	case <-time.After(150 * time.Millisecond):
+		// ok
+	}
 }
 
 // TestTick_Notify_ErrorIsNonFatal: when notify.Send returns an error,
@@ -334,7 +378,7 @@ func TestTick_Notify_ErrorIsNonFatal(t *testing.T) {
 	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
 	pl := &fakePlacer{}
 	pos := &fakePosReader{qty: 0}
-	notif := &fakeNotifier{sendErr: fmt.Errorf("discord down")}
+	notif := &fakeNotifier{sent: make(chan string, 4), sendErr: fmt.Errorf("discord down")}
 
 	tr := newTestTrader(src, strat, pl, pos)
 	tr.SetNotifier(notif)
@@ -342,6 +386,13 @@ func TestTick_Notify_ErrorIsNonFatal(t *testing.T) {
 	err := tr.Tick(context.Background())
 	require.NoError(t, err, "notify error must be non-fatal — Tick must return nil")
 	assert.Len(t, pl.placed, 1, "order must still have been placed")
+
+	// Drain the channel (goroutine will still send, just with an error logged).
+	select {
+	case <-notif.sent:
+	case <-time.After(2 * time.Second):
+		t.Fatal("goroutine never delivered to channel")
+	}
 }
 
 // TestRun_ContextCancel: Run cancels promptly when ctx is done.

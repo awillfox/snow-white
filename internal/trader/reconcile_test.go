@@ -212,6 +212,47 @@ func TestReconcile_StoreError(t *testing.T) {
 	}
 }
 
+// TestReconcile_ComputeFillOverflow_LeavesOrderPending: when computeFill returns an overflow
+// error, Reconcile must log it and continue (leave the order PENDING — do NOT apply a
+// corrupted fill). An operator will see the order stuck and investigate.
+func TestReconcile_ComputeFillOverflow_LeavesOrderPending(t *testing.T) {
+	// Use astronomically large position values so computeFill triggers overflow.
+	const hugeQty = int64(4_611_686_018_427_387_904) // ~MaxInt64/2+1
+	const hugeAvg = int64(3)
+	store := &fakeReconcileStore{
+		pending: []order.Order{{ID: 5, Symbol: "BTCTHB", Side: "BUY"}},
+		position: order.Position{
+			Symbol:  "BTCTHB",
+			Qty:     hugeQty,
+			AvgCost: hugeAvg,
+		},
+	}
+	hist := &fakeHistorySource{
+		infos: []invx.OrderInfo{
+			{
+				ClientOrderID:    5,
+				OrderID:          99,
+				State:            "FullyExecuted",
+				QuantityExecuted: 1,
+				AvgPrice:         1,
+			},
+		},
+	}
+
+	n, err := Reconcile(context.Background(), store, hist, "BTCTHB", reconcileNow())
+	if err != nil {
+		t.Fatalf("Reconcile must not return error on computeFill overflow (it continues): %v", err)
+	}
+	// The order is left pending (n=0) — not applied.
+	if n != 0 {
+		t.Errorf("expected 0 reconciled (overflow leaves order pending), got %d", n)
+	}
+	// Must NOT have called ApplyFill — that would write corrupted data.
+	if len(store.fillInputs) != 0 {
+		t.Errorf("expected 0 ApplyFill calls on overflow, got %d", len(store.fillInputs))
+	}
+}
+
 func TestReconcile_Working_LeftPending(t *testing.T) {
 	store := &fakeReconcileStore{
 		pending: []order.Order{{ID: 7, Symbol: "BTCTHB", Side: "BUY"}},

@@ -3,6 +3,7 @@ package trader
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"snow-white/internal/invx"
@@ -34,6 +35,13 @@ type reconcileStore interface {
 // SpentDelta is 0 in the fill — spend was already counted when the order was placed.
 //
 // Returns the count of orders that were reconciled (settled).
+//
+// SINGLE-INSTANCE ASSUMPTION: GetPosition is read outside ApplyFill's transaction,
+// so Reconcile assumes a SINGLE trader process per symbol. The daemon is
+// single-threaded and startup reconcile completes before Run begins, so this is
+// safe by construction. Concurrent Reconcile instances for the same symbol would
+// race on the position read and could double-apply fills — do NOT run two daemons
+// for the same symbol.
 func Reconcile(ctx context.Context, store reconcileStore, hist OrderHistorySource, symbol string, now func() time.Time) (int, error) {
 	pending, err := store.ListPendingLive(ctx)
 	if err != nil {
@@ -70,7 +78,13 @@ func Reconcile(ctx context.Context, store reconcileStore, hist OrderHistorySourc
 			if err != nil {
 				return n, fmt.Errorf("get position for order %d: %w", o.ID, err)
 			}
-			newQty, newAvg, newPnl, lossDelta := computeFill(pos, o.Side, oi.QuantityExecuted, oi.AvgPrice)
+			newQty, newAvg, newPnl, lossDelta, fillErr := computeFill(pos, o.Side, oi.QuantityExecuted, oi.AvgPrice)
+			if fillErr != nil {
+				// Overflow in position arithmetic — do NOT apply a corrupted fill.
+				// Leave the order PENDING so an operator sees it stuck and can investigate.
+				log.Printf("reconcile: computeFill overflow for order %d (left pending): %v", o.ID, fillErr)
+				continue
+			}
 			if err := store.ApplyFill(ctx, order.FillInput{
 				OrderID:        o.ID,
 				Symbol:         o.Symbol,

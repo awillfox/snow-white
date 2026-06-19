@@ -75,9 +75,11 @@ func (t *Trader) SetNotifier(n Notifier) {
 	t.notify = n
 }
 
-// sendNotify sends a notification after a successful Place.
-// It logs and ignores any error so notification failures never affect trading.
-func (t *Trader) sendNotify(ctx context.Context, side, symbol, stratName, mode string, orderID int64) {
+// sendNotify fires a notification in a background goroutine after a successful Place.
+// The goroutine uses a fresh bounded context (10s) so a slow or hung Discord webhook
+// never blocks the trading loop — Tick returns immediately after Place succeeds.
+// The nil-check is synchronous to avoid spawning a goroutine for no-op cases.
+func (t *Trader) sendNotify(_ context.Context, side, symbol, stratName, mode string, orderID int64) {
 	if t.notify == nil {
 		return
 	}
@@ -88,9 +90,14 @@ func (t *Trader) sendNotify(ctx context.Context, side, symbol, stratName, mode s
 		sideLabel = "SELL"
 	}
 	msg := fmt.Sprintf("%s %s %s via %s (order %d, %s)", emoji, sideLabel, symbol, stratName, orderID, mode)
-	if err := t.notify.Send(ctx, msg); err != nil {
-		log.Printf("trader: notify error (non-fatal): %v", err)
-	}
+	// Fire-and-forget so a slow/failed Discord webhook never blocks the trading loop.
+	go func() {
+		nctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := t.notify.Send(nctx, msg); err != nil {
+			log.Printf("trader: notify error (non-fatal): %v", err)
+		}
+	}()
 }
 
 // Tick loads recent candles, evaluates the strategy, and places an intent if warranted.

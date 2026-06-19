@@ -198,7 +198,9 @@ func newOrderSendCmd() *cobra.Command {
 			}
 			fmt.Printf("order placed: orderId=%d\n", orderID)
 
-			// Non-fatal Discord notification.
+			// Non-fatal Discord notification — intentionally synchronous: this is a
+			// one-shot CLI process that exits immediately after; a goroutine would be
+			// killed before it delivers the message.
 			dc := discord.New(cfg.DiscordWebhookURL)
 			notifyMsg := fmt.Sprintf("📝 manual LIVE %s %s qty=%s price=%s (orderId=%d)",
 				sideLabel,
