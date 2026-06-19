@@ -2,6 +2,7 @@ package trader
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -167,6 +168,64 @@ func TestTick_EmptyCandles(t *testing.T) {
 	require.NoError(t, tr.Tick(context.Background()))
 
 	assert.Empty(t, pl.placed)
+}
+
+// TestTick_ReconcileHook_CalledFirst: when a reconcile hook is set, Tick calls it
+// before evaluating the strategy. Verifies the hook runs and that normal Tick
+// behaviour (place a buy) still follows.
+func TestTick_ReconcileHook_CalledFirst(t *testing.T) {
+	reconcileCalled := false
+	cs := makeCandles(100_00, 200_00, 300_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetReconcile(func(_ context.Context) error {
+		reconcileCalled = true
+		return nil
+	})
+
+	require.NoError(t, tr.Tick(context.Background()))
+
+	assert.True(t, reconcileCalled, "reconcile hook must be called on Tick when set")
+	assert.Len(t, pl.placed, 1, "Tick must still place an intent after reconcile")
+}
+
+// TestTick_ReconcileHook_NilInPaperMode: no hook is set on a freshly constructed
+// Trader — paper mode must not reconcile.
+func TestTick_ReconcileHook_NilInPaperMode(t *testing.T) {
+	cs := makeCandles(100_00, 200_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Hold}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	// Do NOT call SetReconcile — reconcile field must be nil by default.
+	assert.Nil(t, tr.reconcile, "new Trader must have nil reconcile hook (paper safe default)")
+	require.NoError(t, tr.Tick(context.Background()))
+}
+
+// TestTick_ReconcileHook_ErrorIsNonFatal: a reconcile hook error is logged but
+// does not prevent Tick from placing an intent.
+func TestTick_ReconcileHook_ErrorIsNonFatal(t *testing.T) {
+	cs := makeCandles(100_00, 200_00, 300_00)
+	src := &fakeSource{candles: cs}
+	strat := &stubStrategy{action: strategy.Buy, name: "stub"}
+	pl := &fakePlacer{}
+	pos := &fakePosReader{qty: 0}
+
+	tr := newTestTrader(src, strat, pl, pos)
+	tr.SetReconcile(func(_ context.Context) error {
+		return fmt.Errorf("db down")
+	})
+
+	// Tick must not return the reconcile error.
+	err := tr.Tick(context.Background())
+	require.NoError(t, err, "reconcile error must be non-fatal (logged, not returned)")
+	assert.Len(t, pl.placed, 1, "Tick must still evaluate and place after reconcile error")
 }
 
 // TestRun_ContextCancel: Run cancels promptly when ctx is done.

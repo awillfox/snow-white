@@ -70,11 +70,18 @@ func newTradeCmd() *cobra.Command {
 				cfg.KillFile)
 
 			if live {
-				if n, err := trader.Reconcile(ctx, orderStore, client, symbol); err != nil {
+				// Startup reconcile: settle any orders left pending from a prior crash.
+				if n, err := trader.Reconcile(ctx, orderStore, client, symbol, time.Now); err != nil {
 					return fmt.Errorf("startup reconcile: %w", err)
 				} else if n > 0 {
 					fmt.Printf("reconciled %d pending live order(s)\n", n)
 				}
+				// Per-tick reconcile hook: apply fills every tick so position/loss_today
+				// stay current before the guard evaluates.
+				tr.SetReconcile(func(rctx context.Context) error {
+					_, err := trader.Reconcile(rctx, orderStore, client, symbol, time.Now)
+					return err
+				})
 			}
 
 			if err := tr.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {

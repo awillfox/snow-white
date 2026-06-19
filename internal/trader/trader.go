@@ -29,14 +29,15 @@ type positionReader interface {
 
 // Trader runs a strategy on a schedule and places buy/sell intents via the pipeline.
 type Trader struct {
-	src      CandleSource
-	strat    strategy.Strategy
-	pipe     placer
-	pos      positionReader
-	symbol   string
-	buyValue int64 // satang to deploy per Buy
-	interval time.Duration
-	now      func() time.Time
+	src        CandleSource
+	strat      strategy.Strategy
+	pipe       placer
+	pos        positionReader
+	symbol     string
+	buyValue   int64 // satang to deploy per Buy
+	interval   time.Duration
+	now        func() time.Time
+	reconcile  func(ctx context.Context) error // nil in paper mode
 }
 
 // NewTrader constructs a Trader. buyValueTHB is in satang (THB * 100).
@@ -53,12 +54,29 @@ func NewTrader(src CandleSource, strat strategy.Strategy, pipe placer, pos posit
 	}
 }
 
+// SetReconcile registers a hook that Tick calls before evaluating the strategy.
+// In live mode, this should call trader.Reconcile so fresh fills are applied
+// (position + loss_today updated) before the guard fires.
+// Pass nil to clear (paper mode — no hook).
+func (t *Trader) SetReconcile(fn func(ctx context.Context) error) {
+	t.reconcile = fn
+}
+
 // Tick loads recent candles, evaluates the strategy, and places an intent if warranted.
 // Buy: only when flat (pos.Qty == 0).
 // Sell: only when holding (pos.Qty > 0).
 // Hold: no action.
 // A blocked/failed Place is logged but not returned as an error.
 func (t *Trader) Tick(ctx context.Context) error {
+	// Run the reconcile hook first (live only) so position/loss_today reflect
+	// any fills that completed since the last tick.
+	if t.reconcile != nil {
+		if err := t.reconcile(ctx); err != nil {
+			log.Printf("trader: reconcile error: %v", err)
+			// Non-fatal: continue ticking — stale position is better than no tick.
+		}
+	}
+
 	to := t.now().UTC()
 	from := to.AddDate(0, 0, -1) // last ~1 day of candles covers typical warm-up
 
