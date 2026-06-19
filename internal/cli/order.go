@@ -107,13 +107,16 @@ func newOrderSendCmd() *cobra.Command {
 			}
 
 			in := invx.SendOrderInput{
-				Symbol:        symbol,
-				Side:          side,
-				Type:          orderType,
-				LimitPrice:    priceSatang,
-				Quantity:      qtyUnits,
-				Value:         valueSatang,
-				ClientOrderID: 0,
+				Symbol:     symbol,
+				Side:       side,
+				Type:       orderType,
+				LimitPrice: priceSatang,
+				Quantity:   qtyUnits,
+				Value:      valueSatang,
+				// InnovestX requires clientOrderId > 0 (despite the docs marking it
+				// "optional"). Use a millisecond timestamp — positive and unique
+				// enough for manual orders; cancel by --order-id otherwise.
+				ClientOrderID: time.Now().UnixMilli(),
 			}
 
 			sideLabel := "BUY"
