@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -45,6 +47,10 @@ func (c *Client) Send(ctx context.Context, content string) error {
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
+		var urlErr *net.OpError
+		if errors.As(err, &urlErr) {
+			return fmt.Errorf("discord: http: %w", urlErr.Err)
+		}
 		return fmt.Errorf("discord: http: %w", err)
 	}
 	defer resp.Body.Close()
