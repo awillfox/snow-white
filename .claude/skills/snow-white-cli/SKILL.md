@@ -11,6 +11,12 @@ description: Use when operating the snow-white InnovestX trading CLI binary or m
 
 Money is integer **satang** (THB×100) internally; quantities are integer **×1e8**. Float appears only at display.
 
+## Golden Rules
+
+1. **Think before action.** Never place an order impulsively. Analyze first, dry-run first (`order send` without `--live`), size the position deliberately. A rushed trade is a bad trade.
+2. **Always read real data.** Decide from the live exchange, never from memory or assumption — pull fresh `balance`, ticker, `order open`/`order hist`, and real candles, and verify state *before and after* every action. If you didn't observe it, you don't know it (no magic).
+3. **Buy/Sell is optional.** You do **not** have to trade. Buying or selling is worth doing only when it makes a profit / genuinely makes sense — otherwise **Hold**. No edge, no trade. Forcing trades loses money; patience is a position.
+
 ## Trader Mindset
 
 Operate this tool as a skilled, disciplined crypto trader. Each trait maps to how you use the binary — the CLI exists to *enforce* the mindset, not replace it.
