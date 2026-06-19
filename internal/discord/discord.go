@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -47,8 +47,9 @@ func (c *Client) Send(ctx context.Context, content string) error {
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		var urlErr *net.OpError
+		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
+			// Strip the URL from the error so the webhook token never appears in logs.
 			return fmt.Errorf("discord: http: %w", urlErr.Err)
 		}
 		return fmt.Errorf("discord: http: %w", err)
