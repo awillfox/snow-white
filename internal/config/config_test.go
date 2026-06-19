@@ -59,3 +59,16 @@ func TestLoadRiskCaps(t *testing.T) {
 		t.Fatalf("kill file = %q", cfg.KillFile)
 	}
 }
+
+func TestLoadDiscordWebhookURL(t *testing.T) {
+	t.Setenv("INVX_APIKEY", "k")
+	t.Setenv("INVX_SECRET", "s")
+	t.Setenv("DISCORD_BOT_URL", "https://discord.com/api/webhooks/test/token")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DiscordWebhookURL != "https://discord.com/api/webhooks/test/token" {
+		t.Fatalf("DiscordWebhookURL = %q", cfg.DiscordWebhookURL)
+	}
+}

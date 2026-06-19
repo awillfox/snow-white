@@ -19,6 +19,7 @@ type Config struct {
 	MaxDaily        int64         `mapstructure:"INVX_MAX_DAILY"`
 	MaxLoss         int64         `mapstructure:"INVX_MAX_LOSS"`
 	KillFile        string        `mapstructure:"INVX_KILL_FILE"`
+	DiscordWebhookURL string        `mapstructure:"DISCORD_BOT_URL"`
 }
 
 // Load reads configuration from environment variables, falling back to an
@@ -41,6 +42,7 @@ func Load() (*Config, error) {
 		"INVX_APIKEY", "INVX_SECRET", "INVX_HOST", "PSQL_URL",
 		"INVX_SYMBOLS", "INVX_COLLECT_INTERVAL",
 		"INVX_MAX_ORDER", "INVX_MAX_DAILY", "INVX_MAX_LOSS", "INVX_KILL_FILE",
+		"DISCORD_BOT_URL",
 	} {
 		_ = v.BindEnv(k)
 	}
