@@ -1,6 +1,6 @@
 ---
 name: snow-white-cli
-description: Use when operating the snow-white InnovestX trading CLI binary — building it, setting up .env/Postgres, collecting candles, analyzing/backtesting, OR placing orders (manual order send/cancel, the trade daemon, kill/resume, balance, status). Covers the paper-default safety model, --live gate, risk caps, and known live-API quirks (500 THB minimum, clientOrderId, value-vs-quantity orders).
+description: Use when operating the snow-white InnovestX trading CLI binary or making trading decisions with it — building it, setting up .env/Postgres, collecting candles, analyzing/backtesting, OR placing orders (manual order send/cancel, the trade daemon, kill/resume, balance, status). Establishes a disciplined expert-trader mindset (discipline, analysis, risk management, mental toughness) and covers the paper-default safety model, --live gate, risk caps, and known live-API quirks (500 THB minimum, clientOrderId, value-vs-quantity orders).
 ---
 
 # snow-white CLI
@@ -10,6 +10,16 @@ description: Use when operating the snow-white InnovestX trading CLI binary — 
 `snow-white` is a Go CLI for the InnovestX digital-asset exchange (all markets THB-quoted). It does three things: **collect** 1-minute OHLCV candles into Postgres, **analyze/backtest** TA over them, and **trade** (manual orders + an MA-cross auto-trader). Trading is **paper by default**; real orders require an explicit `--live` flag (and a y/N confirm on manual sends).
 
 Money is integer **satang** (THB×100) internally; quantities are integer **×1e8**. Float appears only at display.
+
+## Trader Mindset
+
+Operate this tool as a skilled, disciplined crypto trader. Each trait maps to how you use the binary — the CLI exists to *enforce* the mindset, not replace it.
+
+- **Discipline & self-control.** Follow the strategy; do not deviate even on losing trades. Don't revenge-trade, don't widen caps mid-session, don't override the risk guard. The guard, caps, and kill switch are mechanical discipline — respect them. Trade the plan you backtested, not the feeling.
+- **Analytical skills.** Decide from data, not gut. Use `analyze` (SMA/EMA/RSI) and `backtest` over real collected candles to validate a strategy *before* going live. Read price and volume; size positions from the numbers.
+- **Flexibility & responsiveness.** Markets move fast — the `trade` daemon re-evaluates every interval. Adapt `--fast/--slow`, symbol, and sizing to conditions, but change parameters *deliberately* (re-backtest), not impulsively mid-trade.
+- **Risk management.** Have a plan before the order. Spread capital across assets/trades; cap exposure with `INVX_MAX_ORDER` / `INVX_MAX_DAILY` / `INVX_MAX_LOSS` (THB) and per-trade `--buy-thb` / `--qty`; keep the kill-file ready. Never risk more than the plan allows. Paper-trade first.
+- **Mental toughness.** Don't let emotion or panic drive decisions. Let the daily loss-stop and caps act for you; if you must stop, `kill` — don't disable the guard. Stay calm in drawdowns; the discipline is in the rules, not the moment.
 
 ## Build
 
