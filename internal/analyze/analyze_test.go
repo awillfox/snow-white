@@ -33,3 +33,20 @@ func TestFormatCSVHeader(t *testing.T) {
 		t.Fatalf("missing header: %q", out)
 	}
 }
+
+func TestFormatCSVRSINotDividedBy100(t *testing.T) {
+	// Strictly increasing closes yield RSI = 100 (all gains, no losses).
+	// The RSI column should be "100.00", NOT "1.00" (which is the bug: 100/100=1).
+	rows := Compute(mkCandles(10, 20, 30, 40, 50), 0, 0, 2)
+	out := FormatCSV(rows)
+
+	// Split output and extract RSI column (index 4) from the last data row.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	lastLine := lines[len(lines)-1]
+	fields := strings.Split(lastLine, ",")
+	rsiField := fields[4]
+
+	if rsiField != "100.00" {
+		t.Errorf("RSI field = %q, want 100.00 (not divided by 100)", rsiField)
+	}
+}

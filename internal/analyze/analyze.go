@@ -61,15 +61,24 @@ func FormatCSV(rows []Row) string {
 		fmt.Fprintf(&b, "%s,%s,%s,%s,%s\n",
 			r.OpenTime.UTC().Format(time.RFC3339),
 			scale.Format(r.Close, 2),
-			fmtFloat(r.SMA), fmtFloat(r.EMA), fmtFloat(r.RSI),
+			fmtPrice(r.SMA), fmtPrice(r.EMA), fmtOsc(r.RSI),
 		)
 	}
 	return b.String()
 }
 
-func fmtFloat(v float64) string {
+// fmtPrice renders a satang-scale indicator value as THB (2 decimals); NaN -> "".
+func fmtPrice(v float64) string {
 	if v != v { // NaN
 		return ""
 	}
-	return fmt.Sprintf("%.2f", v/100) // satang-scale indicator -> THB display
+	return fmt.Sprintf("%.2f", v/100)
+}
+
+// fmtOsc renders a dimensionless oscillator value (e.g. RSI) as-is; NaN -> "".
+func fmtOsc(v float64) string {
+	if v != v { // NaN
+		return ""
+	}
+	return fmt.Sprintf("%.2f", v)
 }
