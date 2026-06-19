@@ -1,0 +1,29 @@
+version: "3"
+
+dotenv: [".env"]
+
+tasks:
+  build:
+    desc: Build the snow-white binary
+    cmds:
+      - go build -o snow-white .
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  migrate-dev:
+    desc: Apply schema.hcl to the dev database
+    cmds:
+      - atlas schema apply --url "$PSQL_DEV_URL" --to "file://schema.hcl" --dev-url "docker://postgres/16/dev?search_path=public" --auto-approve
+
+  generate-sql-schema:
+    desc: Inspect dev DB and regenerate schema.sql for sqlc
+    cmds:
+      - atlas schema inspect --url "$PSQL_DEV_URL" --format "{{`{{ sql . }}`}}" > schema.sql
+
+  sqlcgen:
+    desc: Regenerate sqlc code from internal/sql + schema.sql
+    cmds:
+      - sqlc generate
